@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from flask import Flask, request, render_template
 
 # 1. Định nghĩa lại class LogisticRegression_pt
 class LogisticRegression_pt(nn.Module):
@@ -42,12 +43,15 @@ features = [
 ]
 
 # Tiền xử lý dữ liệu
-def preprocess_data(data_path):
+def preprocess_data(data):
     # Đọc dữ liệu từ file CSV
-    data = pd.read_csv(data_path)
     data.drop(columns=['Unnamed: 0'], inplace=True)
-    print(data.info())
-    print(data.shape)
+    if data.shape[1] != 70:
+            return render_template('index.html', prediction_text=f"Lỗi: File phải chứa đúng 70 cột đặc trưng (tìm thấy {data.shape[1]} cột).")
+    if not all(col in data.columns for col in features):
+            return render_template('index.html', prediction_text="Lỗi: Tên cột trong file không khớp với 70 đặc trưng yêu cầu.")
+    # print(data.info())
+    # print(data.head())
     X_new = torch.tensor(data.values, dtype=torch.float32)
     return data, X_new
 
@@ -59,33 +63,90 @@ def predict(model, X_tensor, threshold):
     return predictions, outputs
 
 # Chạy chương trình
-if __name__ == "__main__":
-    model_path = "D:\\11.NCKH\\model.pth"  # Đường dẫn tới file model.pth
-    data_path = "unlabel_testcase_data.csv"  # Đường dẫn tới file dữ liệu mới
+# if __name__ == "__main__":
+#      # Đường dẫn tới file model.pth
+#     data_path = "unlabel_testcase_data.csv"  # Đường dẫn tới file dữ liệu mới
 
-    # Load mô hình và threshold
-    try:
-        model, threshold = load_model(model_path)
-        print("Model loaded successfully!")
-        print("Threshold:", threshold)
-        print("Model architecture:", model)
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        exit()
+#     # Load mô hình và threshold
+#     try:
+#         model, threshold = load_model(model_path)
+#         print("Model loaded successfully!")
+#         print("Threshold:", threshold)
+#         print("Model architecture:", model)
+#     except Exception as e:
+#         print(f"Error loading model: {e}")
+#         exit()
 
-    # Tiền xử lý dữ liệu
-    try:
-        data, X_tensor = preprocess_data(data_path)
-        print("Data preprocessed successfully!")
-    except Exception as e:
-        print(f"Error preprocessing data: {e}")
-        exit()
+#     # Tiền xử lý dữ liệu
+#     try:
+#         data, X_tensor = preprocess_data(data_path)
+#         print("Data preprocessed successfully!")
+#     except Exception as e:
+#         print(f"Error preprocessing data: {e}")
+#         exit()
 
-    # Dự đoán
+#     # Dự đoán
+#     # try:
+#     #     predictions, outputs = predict(model, X_tensor, threshold)
+#     #     data['Predicted Label'] = predictions
+#     #     print(data.head)
+#     # except Exception as e:
+#     #     print(f"Error making predictions: {e}")
+#     #     exit()
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def home():
+    return render_template('index.html', prediction_text=None)
+
+# Route xử lý dự đoán từ file
+@app.route('/predict', methods=['POST'])
+def predict_by_model():
     try:
-        predictions, outputs = predict(model, X_tensor, threshold)
-        data['Predicted Label'] = predictions
-        print(data.head)
+        model_path = "D:\\11.NCKH\\model.pth"
+        # Kiểm tra file được tải lên
+        if 'file' not in request.files:
+            return render_template('index.html', prediction_text="Lỗi: Vui lòng tải lên một file.")
+
+        file = request.files['file']
+        if file.filename == '':
+            return render_template('index.html', prediction_text="Lỗi: Chưa chọn file.")
+
+        if not file.filename.endswith('.csv'):
+            return render_template('index.html', prediction_text="Lỗi: Vui lòng tải lên file .csv.")
+
+        # Tiền xử lý dữ liệu
+        try:
+            data, X_tensor = preprocess_data(pd.read_csv(file))
+            print("Data preprocessed successfully!")
+        except Exception as e:
+            print(f"Error preprocessing data: {e}")
+            exit()
+
+        # Load mô hình và threshold
+        try:
+            model, threshold = load_model(model_path)
+            print("Model loaded successfully!")
+            print("Threshold:", threshold)
+            print("Model architecture:", model)
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            exit()
+
+         # Dự đoán
+        try:
+            predictions, outputs = predict(model, X_tensor, threshold)
+            data['Predicted Label'] = predictions
+            print(data.head)
+            print(type(data))
+            prediction_text = data.to_html(classes='table table-striped table-bordered', index=False)
+        except Exception as e:
+            print(f"Error making predictions: {e}")
+            exit()
+        return render_template('index.html', prediction_text=prediction_text)
     except Exception as e:
-        print(f"Error making predictions: {e}")
-        exit()
+        return render_template('index.html', prediction_text=f"Lỗi: {str(e)}")
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
