@@ -7,7 +7,7 @@
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- CSS tùy chỉnh (nếu cần) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/index.css') }}">
 </head>
 <body>
     <div class="container mt-5">
@@ -23,12 +23,37 @@
             </div>
         </form>
 
+        <!-- Spinner chờ -->
+        <div id="loading-spinner" class="text-center mt-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Đang xử lý...</span>
+            </div>
+            <p>Đang xử lý dữ liệu, vui lòng chờ...</p>
+        </div>
+
         <!-- Hiển thị kết quả -->
         {% if prediction_text %}
+            <div class="mt-4">
+                {{ prediction_text | safe }}
+            </div>
+        {% else %}
             <div class="mt-4 alert alert-info">
-                <div>{{ prediction_text | safe }}</div>
+                Tải lên file CSV để nhận dự đoán. Kết quả sẽ hiển thị mẫu và cung cấp tùy chọn tải xuống.
             </div>
         {% endif %}
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- JavaScript để hiển thị spinner -->
+    <script>
+        document.getElementById('predict-form').addEventListener('submit', function() {
+            // Ẩn thông báo mặc định (nếu có)
+            document.querySelector('.alert-info')?.remove();
+            // Hiển thị spinner khi submit
+            document.getElementById('loading-spinner').style.display = 'block';
+        });
+    </script>
     </div>
 
     <!-- Bootstrap 5 JS -->

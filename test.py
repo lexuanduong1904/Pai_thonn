@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, send_file
+import io
 
 # 1. Định nghĩa lại class LogisticRegression_pt
 class LogisticRegression_pt(nn.Module):
@@ -42,6 +43,8 @@ features = [
     'Active Min', 'Idle Mean', 'Idle Std', 'Idle Max', 'Idle Min'
 ]
 
+last_csv_buffer = None
+
 # Tiền xử lý dữ liệu
 def preprocess_data(data):
     # Đọc dữ liệu từ file CSV
@@ -62,38 +65,6 @@ def predict(model, X_tensor, threshold):
         predictions = (outputs >= threshold).astype(int)
     return predictions, outputs
 
-# Chạy chương trình
-# if __name__ == "__main__":
-#      # Đường dẫn tới file model.pth
-#     data_path = "unlabel_testcase_data.csv"  # Đường dẫn tới file dữ liệu mới
-
-#     # Load mô hình và threshold
-#     try:
-#         model, threshold = load_model(model_path)
-#         print("Model loaded successfully!")
-#         print("Threshold:", threshold)
-#         print("Model architecture:", model)
-#     except Exception as e:
-#         print(f"Error loading model: {e}")
-#         exit()
-
-#     # Tiền xử lý dữ liệu
-#     try:
-#         data, X_tensor = preprocess_data(data_path)
-#         print("Data preprocessed successfully!")
-#     except Exception as e:
-#         print(f"Error preprocessing data: {e}")
-#         exit()
-
-#     # Dự đoán
-#     # try:
-#     #     predictions, outputs = predict(model, X_tensor, threshold)
-#     #     data['Predicted Label'] = predictions
-#     #     print(data.head)
-#     # except Exception as e:
-#     #     print(f"Error making predictions: {e}")
-#     #     exit()
-
 app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
@@ -103,6 +74,7 @@ def home():
 # Route xử lý dự đoán từ file
 @app.route('/predict', methods=['POST'])
 def predict_by_model():
+    global last_csv_buffer
     try:
         model_path = "D:\\11.NCKH\\model.pth"
         # Kiểm tra file được tải lên
@@ -140,7 +112,22 @@ def predict_by_model():
             data['Predicted Label'] = predictions
             print(data.head)
             print(type(data))
-            prediction_text = data.to_html(classes='table table-striped table-bordered', index=False)
+
+            csv_buffer = io.StringIO()
+            data.to_csv(csv_buffer, index=False)
+            csv_buffer.seek(0)
+
+            last_csv_buffer = csv_buffer
+
+            # Trả về file CSV để tải về
+            preview_html = data.head(10).to_html(classes='table table-striped table-bordered', index=False)
+            prediction_text = f"""
+                <div class="alert alert-success">Dự đoán hoàn tất! Dưới đây là 10 dòng đầu tiên:</div>
+                {preview_html}
+                <div class="mt-3 text-center">
+                    <a href="/download" class="btn btn-primary">Tải xuống file CSV đầy đủ</a>
+                </div>
+            """
         except Exception as e:
             print(f"Error making predictions: {e}")
             exit()
@@ -148,5 +135,17 @@ def predict_by_model():
     except Exception as e:
         return render_template('index.html', prediction_text=f"Lỗi: {str(e)}")
 
+@app.route('/download')
+def download():
+    global last_csv_buffer
+    if last_csv_buffer is None:
+        return "Không có file nào để tải. Vui lòng dự đoán trước!"
+
+    return send_file(
+        io.BytesIO(last_csv_buffer.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='prediction_results.csv'
+    )
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
